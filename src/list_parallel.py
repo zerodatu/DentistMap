@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 
+#!/usr/bin/env python3
+
 import requests
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+import random
 
 # ベースURL
 base_url = "https://www.shika-town.com/accounts/search/list"
@@ -16,55 +20,69 @@ headers = {
 }
 
 def scrape_page(page):
+    print(f"{page}ページ目取得処理開始")
     params = {"page": page}
-    response = requests.get(base_url, params=params, headers=headers)
-    result = []
+    retries = 3
+    while retries > 0:
+        try:
+            response = requests.get(base_url, params=params, headers=headers)
+            if response.status_code != 200:
+                print(f"ページ {page} を取得できませんでした。ステータスコード: {response.status_code}")
+                retries -= 1
+                time.sleep(random.uniform(1, 3))
+                continue
 
-    if response.status_code != 200:
-        print(f"ページ {page} を取得できませんでした。ステータスコード: {response.status_code}")
-        return result
+            soup = BeautifulSoup(response.content, "html.parser")
 
-    soup = BeautifulSoup(response.content, "html.parser")
+            # 'single_box'クラス内の情報を取得
+            items = soup.find_all("div", class_="single_box")
+            if not items:
+                print(f"ページ {page} に結果がありません。")
+                return []
 
-    # 'single_box'クラス内の情報を取得
-    items = soup.find_all("div", class_="single_box")
-    if not items:
-        print(f"ページ {page} に結果がありません。")
-        return result
+            result = []
+            for item in items:
+                # 歯医者名を取得
+                name_tag = item.find("div", class_="com_title_box").find("h2")
+                name = name_tag.text.strip() if name_tag else "N/A"
 
-    for item in items:
-        # 歯医者名を取得
-        name_tag = item.find("div", class_="com_title_box").find("h2")
-        name = name_tag.text.strip() if name_tag else "N/A"
+                # 住所と電話番号を取得
+                table = item.find("table", class_="data auto")
+                if table:
+                    rows = table.find_all("tr")
+                    address = "N/A"
+                    phone = "N/A"
 
-        # 住所と電話番号を取得
-        table = item.find("table", class_="data auto")
-        if table:
-            rows = table.find_all("tr")
-            address = "N/A"
-            phone = "N/A"
+                    for row in rows:
+                        header = row.find("th")
+                        data = row.find("td")
+                        if header and data:
+                            header_text = header.text.strip()
+                            data_text = data.text.strip()
+                            if "住所" in header_text:
+                                address = data_text
+                            if "電話" in header_text:
+                                phone = data_text
 
-            for row in rows:
-                header = row.find("th")
-                data = row.find("td")
-                if header and data:
-                    header_text = header.text.strip()
-                    data_text = data.text.strip()
-                    if "住所" in header_text:
-                        address = data_text
-                    if "電話" in header_text:
-                        phone = data_text
+                    result.append({
+                        "name": name,
+                        "address": address,
+                        "phone": phone
+                    })
 
-            result.append({
-                "name": name,
-                "address": address,
-                "phone": phone
-            })
+            # 各ページのスクレイピング完了後にランダムな遅延を追加
+            time.sleep(random.uniform(1, 3))
+            return result
 
-    return result
+        except Exception as exc:
+            print(f"ページ {page} の取得中に例外が発生しました: {exc}")
+            retries -= 1
+            time.sleep(random.uniform(1, 3))
+    print(f"{page}ページ目取得処理終了")
+    return []
 
 # 並列処理の設定
-max_workers = 10  # 並列処理するスレッド数
+max_workers = 10  # 並列処理するスレッド数を減らして負荷を軽減
 with ThreadPoolExecutor(max_workers=max_workers) as executor:
     future_to_page = {executor.submit(scrape_page, page): page for page in range(1, 7002)}
     for future in as_completed(future_to_page):
