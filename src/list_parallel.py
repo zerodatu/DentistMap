@@ -69,6 +69,8 @@ def scrape_page(page):
                         "address": address,
                         "phone": phone
                     })
+            
+            print(f"{page}ページ目取得処理終了")
 
             # 各ページのスクレイピング完了後にランダムな遅延を追加
             time.sleep(random.uniform(1, 3))
@@ -78,7 +80,6 @@ def scrape_page(page):
             print(f"ページ {page} の取得中に例外が発生しました: {exc}")
             retries -= 1
             time.sleep(random.uniform(1, 3))
-    print(f"{page}ページ目取得処理終了")
     return []
 
 # 並列処理の設定
